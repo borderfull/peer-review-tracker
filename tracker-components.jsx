@@ -73,6 +73,8 @@ function OnboardingPage({ onSubmit }) {
 
   const canSubmit = !parsing && feedbacks.some((f) => f.trim());
   const field = { width: "100%", padding: "10px 13px", borderRadius: 7, border: `1px solid ${C.border}`, fontSize: 13.5, background: C.surface, color: C.text, boxSizing: "border-box", fontFamily: "inherit" };
+  const rlState = window.getRateLimitState();
+  const remaining = Math.max(0, window.RATE_LIMIT_MAX - rlState.used);
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "48px 20px 80px" }}>
@@ -80,13 +82,13 @@ function OnboardingPage({ onSubmit }) {
 
         {/* Header */}
         <div style={{ marginBottom: 36, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <div style={{ display: "flex", width: 56, height: 56, borderRadius: 12, background: C.terra, marginBottom: 18, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <svg viewBox="0 0 48 48" width="36" height="36" fill="none">
-              <rect x="4" y="2" width="28" height="36" rx="3" fill="rgba(255,255,255,0.15)" />
-              <rect x="8" y="9" width="20" height="2" rx="1" fill="white" opacity="0.8" />
-              <rect x="8" y="14" width="14" height="2" rx="1" fill="white" opacity="0.5" />
-              <rect x="8" y="19" width="17" height="2" rx="1" fill="white" opacity="0.5" />
-              <rect x="8" y="24" width="10" height="2" rx="1" fill="white" opacity="0.5" />
+          <div style={{ display: "flex", width: 60, height: 60, borderRadius: 14, background: C.terra, marginBottom: 18, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <svg viewBox="0 0 28 28" width="30" height="30" fill="none">
+              <path d="M4 2h14l6 6v18a1 1 0 01-1 1H5a1 1 0 01-1-1V3a1 1 0 011-1z" fill="rgba(255,255,255,0.22)" />
+              <path d="M18 2l6 6h-5a1 1 0 01-1-1V2z" fill="rgba(255,255,255,0.22)" />
+              <rect x="7" y="11" width="14" height="2"   rx="1" fill="white" opacity="0.95" />
+              <rect x="7" y="16" width="10" height="1.8" rx="0.9" fill="white" opacity="0.6"  />
+              <rect x="7" y="21" width="12" height="1.8" rx="0.9" fill="white" opacity="0.6"  />
             </svg>
           </div>
           <h1 style={{ margin: "0 0 6px", fontSize: 26, fontFamily: "Georgia, serif", fontWeight: 700, color: C.text, letterSpacing: "-0.01em" }}>
@@ -141,6 +143,20 @@ function OnboardingPage({ onSubmit }) {
             {error}
           </div>
         }
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <span style={{ fontSize: 12, color: remaining === 0 ? "oklch(36% 0.12 35)" : C.textMuted }}>
+            {remaining === 0
+              ? "You've used today's allowance — come back tomorrow"
+              : <><strong style={{ color: remaining <= 1 ? C.terra : C.text }}>{remaining}</strong> tracker build{remaining !== 1 ? "s" : ""} left for you today</>
+            }
+          </span>
+          <div style={{ display: "flex", gap: 4 }}>
+            {Array.from({ length: window.RATE_LIMIT_MAX }).map((_, i) => (
+              <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: i < rlState.used ? (remaining === 0 ? "oklch(50% 0.14 40)" : C.terra) : C.borderLight, transition: "background 0.2s" }} />
+            ))}
+          </div>
+        </div>
 
         <button
           onClick={handleSubmit} disabled={!canSubmit}

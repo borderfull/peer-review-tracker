@@ -2,7 +2,7 @@
 
 // ── Rate Limit Management ────────────────────────────────────────────────
 const RATE_LIMIT_KEY = "rt_rateLimit_v1";
-const RATE_LIMIT_MAX = 3;
+const RATE_LIMIT_MAX = 2;
 
 function getRateLimitState() {
   try {
@@ -208,6 +208,8 @@ Critical rules:
 - Where multiple reviewers raise the same concern, merge into ONE task — do not duplicate.
 - Record which reviewers mentioned each concern in the sources array (for reference only).
 - Write a concise 1-2 sentence summary per theme capturing the collective concern.
+- Do NOT transcribe reviewer language verbatim — rewrite every task in plain, actionable English that is easy to understand and work through. Strip academic hedging, redundancy, and jargon. A task should read like a clear instruction, not a critique.
+- Break down large or complex suggestions into smaller, concrete sub-tasks. If a reviewer asks for something broad (e.g. "rewrite the methodology section"), split it into specific steps the author can tackle one at a time. Each task should be completable in a single focused work session.
 
 Return ONLY valid JSON — no markdown fences, no extra text:
 {
