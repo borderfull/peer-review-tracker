@@ -92,7 +92,7 @@ function OnboardingPage({ onSubmit }) {
             </svg>
           </div>
           <h1 style={{ margin: "0 0 6px", fontSize: 26, fontFamily: "Georgia, serif", fontWeight: 700, color: C.text, letterSpacing: "-0.01em" }}>
-            Peer Review Tracker
+            Peer Review Tracker <span style={{ fontSize: 14, fontWeight: 400, color: C.textMuted, fontFamily: "system-ui, sans-serif", letterSpacing: "0.03em" }}>(Experimental)</span>
           </h1>
           <p style={{ margin: 0, fontSize: 14, color: C.textMuted, lineHeight: 1.65, maxWidth: 440, marginInline: "auto" }}>Paste all your reviewer feedback below. The AI will synthesize it into a unified, theme-based revision plan in clear tasks to work through.
 

@@ -74,7 +74,7 @@ function App() {
         <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12, marginBottom:22 }}>
           <div>
             <h1 style={{ margin:0, fontSize:20, fontFamily:"Georgia, serif", fontWeight:700, color:C.text, letterSpacing:"-0.01em" }}>
-              Peer Review Tracker
+              Peer Review Tracker <span style={{ fontSize:13, fontWeight:400, color:C.textMuted, fontFamily:"system-ui, sans-serif" }}>(Experimental)</span>
             </h1>
             <p style={{ margin:"4px 0 0", fontSize:12, color:C.textMuted }}>
               Synthesised revision plan · progress auto-saved
