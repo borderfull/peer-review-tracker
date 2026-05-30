@@ -1,23 +1,5 @@
 {
   "name": "peer-review-tracker",
   "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "next": "latest",
-    "react": "^18",
-    "react-dom": "^18"
-  },
-  "devDependencies": {
-    "eslint": "^8",
-    "eslint-config-next": "latest"
-  },
-  "engines": {
-    "node": "24.x"
-  }
+  "private": true
 }
