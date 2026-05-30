@@ -2,17 +2,14 @@
   "name": "peer-review-tracker",
   "version": "1.0.0",
   "private": true,
-  "engines": {
-    "node": "24.x"
-  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start"
   },
   "dependencies": {
-    "next": "15.3.3",
-    "react": "^18",
-    "react-dom": "^18"
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest"
   }
 }
