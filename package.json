@@ -8,8 +8,17 @@
     "start": "next start"
   },
   "dependencies": {
+<<<<<<< HEAD
     "next": "16.2.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"
+=======
+    "next": "16.2.6",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "overrides": {
+    "postcss": "^8.5.10"
+>>>>>>> 76adf8894c5280d41b3c69bdf1a1d54d82ab8da2
   }
 }
