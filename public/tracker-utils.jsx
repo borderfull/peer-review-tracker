@@ -1,4 +1,15 @@
 // tracker-utils.jsx — theme-centric data model, synthesis API
+// Security fixes applied:
+//   ✅ SYNTH_SYSTEM removed — system prompt now lives server-side only
+//   ✅ shapeResult removed — data.themes consumed directly from API response
+//   ✅ callAPI no longer sends a 'system' field to the backend
+//   ✅ crypto.randomUUID() replaces fragile Date.now() IDs
+//   ✅ CLIENT_APP_TOKEN matches APP_TOKEN env var on the server (set both)
+
+// ── App token (optional) ─────────────────────────────────────────────────
+// To enable the token check, set APP_TOKEN in your Vercel environment variables
+// AND set CLIENT_APP_TOKEN here to the same value. Leave empty to skip.
+const CLIENT_APP_TOKEN = "";
 
 // ── Rate Limit Management ────────────────────────────────────────────────
 const RATE_LIMIT_KEY = "rt_rateLimit_v1";
@@ -8,11 +19,8 @@ function getRateLimitState() {
   try {
     const stored = JSON.parse(localStorage.getItem(RATE_LIMIT_KEY));
     if (!stored) return { used: 0, resetTime: getNextMidnightUTC() };
-    
     const now = Date.now();
-    if (now >= stored.resetTime) {
-      return { used: 0, resetTime: getNextMidnightUTC() };
-    }
+    if (now >= stored.resetTime) return { used: 0, resetTime: getNextMidnightUTC() };
     return stored;
   } catch {
     return { used: 0, resetTime: getNextMidnightUTC() };
@@ -87,7 +95,10 @@ function getLevel(xp) {
   for (let i = LEVELS.length - 1; i >= 0; i--) { if (xp >= LEVELS[i].xpNeeded) { idx = i; break; } }
   return { level: LEVELS[idx], nextLevel: LEVELS[idx + 1] || null };
 }
-function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+// ✅ Uses crypto.randomUUID() — guaranteed unique, no collision risk
+function generateId() { return crypto.randomUUID(); }
+
 function getThemeColor(name) { return THEME_COLORS[name] || C.terra; }
 
 // ── Daily quests from themes[] ────────────────────────────────────────────
@@ -145,35 +156,22 @@ function mergeIntoThemes(existing, incoming) {
   return result;
 }
 
-// ── API helpers ───────────────────────────────────────────────────────────
-function shapeResult(parsed) {
-  return (parsed.themes || []).map(th => ({
-    id: generateId(),
-    themeName: th.themeName || "General",
-    summary: th.summary || "",
-    tasks: (th.tasks || []).map(t => ({
-      id: generateId(), text: t.text || "",
-      xp: Math.max(3, Math.min(35, Number(t.xp) || 15)),
-      importance: t.importance || "moderate",
-      sources: Array.isArray(t.sources) ? t.sources : [],
-      done: false,
-    })).filter(t => t.text),
-  })).filter(th => th.tasks.length > 0);
-}
-
-async function callAPI(userMsg, systemPrompt) {
+// ── API call ──────────────────────────────────────────────────────────────
+// ✅ Does NOT send 'system' — prompt is hardcoded server-side
+// ✅ Returns data.themes directly — no client-side JSON parsing/shaping
+async function callAPI(userMsg) {
   if (!canMakeRequest()) {
     throw new Error("__RATE_LIMIT__");
   }
 
   try {
+    const headers = { "Content-Type": "application/json" };
+    if (CLIENT_APP_TOKEN) headers["X-App-Token"] = CLIENT_APP_TOKEN;
+
     const res = await fetch("/api/analyze", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system: systemPrompt,
-        user: userMsg,
-      }),
+      headers,
+      body: JSON.stringify({ user: userMsg }),
     });
 
     if (!res.ok) {
@@ -185,8 +183,11 @@ async function callAPI(userMsg, systemPrompt) {
     }
 
     const data = await res.json();
+    if (!data.themes || !Array.isArray(data.themes)) {
+      throw new Error("AI did not return valid data. Please try again.");
+    }
     incrementRateLimit();
-    return data.text || data.response || "";
+    return data.themes;
   } catch (e) {
     if (e.message === "__RATE_LIMIT__") throw e;
     const m = String(e?.message || e).toLowerCase();
@@ -198,56 +199,16 @@ async function callAPI(userMsg, systemPrompt) {
   }
 }
 
-const SYNTH_SYSTEM = `You are an academic paper revision assistant. Multiple peer reviewers have submitted feedback.
-
-Synthesize ALL reviewer comments into a unified, theme-organized revision plan.
-
-Critical rules:
-- NEVER write "Reviewer 1 says..." or attribute concerns to specific reviewers in task text.
-- Write every task as a clear, direct action the author should take.
-- Where multiple reviewers raise the same concern, merge into ONE task — do not duplicate.
-- Record which reviewers mentioned each concern in the sources array (for reference only).
-- Write a concise 1-2 sentence summary per theme capturing the collective concern.
-- Do NOT transcribe reviewer language verbatim — rewrite every task in plain, actionable English that is easy to understand and work through. Strip academic hedging, redundancy, and jargon. A task should read like a clear instruction, not a critique.
-- Break down large or complex suggestions into smaller, concrete sub-tasks. If a reviewer asks for something broad (e.g. "rewrite the methodology section"), split it into specific steps the author can tackle one at a time. Each task should be completable in a single focused work session.
-
-Return ONLY valid JSON — no markdown fences, no extra text:
-{
-  "themes": [
-    {
-      "themeName": "Methodology",
-      "summary": "The experimental design needs clearer justification, particularly around sampling.",
-      "tasks": [
-        {
-          "text": "Clarify the sampling methodology and justify its appropriateness in Section 3",
-          "xp": 20,
-          "importance": "major",
-          "sources": ["Reviewer 1", "Reviewer 2"]
-        }
-      ]
-    }
-  ]
-}
-
-Theme names from: Methodology, Literature Review, Theory, Experiments, Writing Quality, Citations, Structure, Format, Contribution, Discussion.
-Importance + XP (average ~15 XP per task): essential 25-35, major 18-24, moderate 13-18, minor 8-12, trivial 3-7.
-Return only JSON.`;
-
+// ── Public API functions ──────────────────────────────────────────────────
 async function parseAllFeedback(feedbackList) {
   const userMsg = "Synthesize the following reviewer feedback:\n\n" +
     feedbackList.map(f => `--- ${f.label} ---\n${f.text}`).join("\n\n");
-  const text  = await callAPI(userMsg, SYNTH_SYSTEM);
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("AI did not return valid JSON. Please try again.");
-  return shapeResult(JSON.parse(match[0]));
+  return await callAPI(userMsg);
 }
 
 async function parseSingleFeedback(text, label) {
   const userMsg = `Synthesize the following reviewer feedback:\n\n--- ${label} ---\n${text}`;
-  const result  = await callAPI(userMsg, SYNTH_SYSTEM);
-  const match   = result.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("AI did not return valid JSON. Please try again.");
-  return shapeResult(JSON.parse(match[0]));
+  return await callAPI(userMsg);
 }
 
 Object.assign(window, {

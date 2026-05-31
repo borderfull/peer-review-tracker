@@ -46,17 +46,23 @@ function RateLimitBanner({ state }) {
 /* ── Onboarding Page ─────────────────────────────────────────────────────── */
 function OnboardingPage({ onSubmit }) {
   const C = window.C;
-  const [feedbacks, setFeedbacks] = useState(["", ""]);
+  // ✅ Each reviewer has a stable UUID — avoids broken state on remove
+  const [feedbacks, setFeedbacks] = useState(() => [
+    { id: crypto.randomUUID(), text: "" },
+    { id: crypto.randomUUID(), text: "" },
+  ]);
   const [parsing, setParsing] = useState(false);
   const [parseStatus, setParseStatus] = useState("");
   const [error, setError] = useState("");
 
-  const addReviewer = () => setFeedbacks((f) => [...f, ""]);
-  const setFeedback = (i, v) => setFeedbacks((f) => f.map((x, j) => j === i ? v : x));
-  const removeFeedback = (i) => setFeedbacks((f) => f.filter((_, j) => j !== i));
+  const addReviewer = () => setFeedbacks((f) => [...f, { id: crypto.randomUUID(), text: "" }]);
+  const setFeedback = (id, v) => setFeedbacks((f) => f.map((x) => x.id === id ? { ...x, text: v } : x));
+  const removeFeedback = (id) => setFeedbacks((f) => f.filter((x) => x.id !== id));
 
   const handleSubmit = async () => {
-    const active = feedbacks.map((f, i) => ({ text: f.trim(), label: `Reviewer ${i + 1}` })).filter((f) => f.text);
+    const active = feedbacks
+      .map((f, i) => ({ text: f.text.trim(), label: `Reviewer ${i + 1}` }))
+      .filter((f) => f.text);
     if (!active.length) {setError("Please paste at least one reviewer's feedback.");return;}
     if (!window.canMakeRequest()) {setError("Daily limit reached. Check back tomorrow at midnight UTC.");return;}
     setParsing(true);setError("");
@@ -71,7 +77,7 @@ function OnboardingPage({ onSubmit }) {
     } finally {setParsing(false);setParseStatus("");}
   };
 
-  const canSubmit = !parsing && feedbacks.some((f) => f.trim());
+  const canSubmit = !parsing && feedbacks.some((f) => f.text.trim());
   const field = { width: "100%", padding: "10px 13px", borderRadius: 7, border: `1px solid ${C.border}`, fontSize: 13.5, background: C.surface, color: C.text, boxSizing: "border-box", fontFamily: "inherit" };
   const rlState = window.getRateLimitState();
   const remaining = Math.max(0, window.RATE_LIMIT_MAX - rlState.used);
@@ -113,18 +119,17 @@ function OnboardingPage({ onSubmit }) {
           </label>
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             {feedbacks.map((fb, i) =>
-            <div key={i}>
+            <div key={fb.id}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: C.terra, letterSpacing: "0.04em" }}>Reviewer {i + 1}</span>
                   {feedbacks.length > 1 &&
-                <button onClick={() => removeFeedback(i)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: C.textMuted, padding: "0 2px" }}>Remove</button>
+                <button onClick={() => removeFeedback(fb.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: C.textMuted, padding: "0 2px" }}>Remove</button>
                 }
                 </div>
                 <textarea
-                value={fb} onChange={(e) => setFeedback(i, e.target.value)}
+                value={fb.text} onChange={(e) => setFeedback(fb.id, e.target.value)}
                 placeholder={`Paste Reviewer ${i + 1}'s full comments here…`}
                 style={{ ...field, height: 160, lineHeight: 1.65, resize: "vertical", fontFamily: "Georgia, serif", fontSize: 13 }} />
-              
               </div>
             )}
           </div>

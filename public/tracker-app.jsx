@@ -1,6 +1,44 @@
 // tracker-app.jsx — theme-centric App
 
 const { useState, useEffect } = React;
+
+/* ── Error Boundary ─────────────────────────────────────────────────────── */
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      const C = window.C || {};
+      return (
+        <div style={{ minHeight: "100vh", background: C.bg || "#f6f4f0", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ maxWidth: 480, textAlign: "center" }}>
+            <div style={{ fontSize: 32, marginBottom: 16 }}>⚠️</div>
+            <h2 style={{ fontFamily: "Georgia, serif", fontSize: 20, color: C.text || "#1e1a14", marginBottom: 10 }}>Something went wrong</h2>
+            <p style={{ fontSize: 14, color: C.textMuted || "#7a7060", lineHeight: 1.65, marginBottom: 24 }}>
+              An unexpected error occurred. Your progress is saved — try refreshing the page.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{ padding: "10px 22px", borderRadius: 8, border: "none", background: C.terra || "#9b3e1e", color: "white", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+              Refresh page
+            </button>
+            {process.env.NODE_ENV === "development" && (
+              <pre style={{ marginTop: 20, fontSize: 11, textAlign: "left", background: "#1e1e1e", color: "#f87171", padding: 14, borderRadius: 7, overflow: "auto" }}>
+                {this.state.error.toString()}
+              </pre>
+            )}
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 const STORAGE_KEY = "reviewTracker_v4";
 
 function App() {
@@ -162,4 +200,8 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
