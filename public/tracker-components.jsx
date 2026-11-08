@@ -45,6 +45,53 @@ function RateLimitBanner({ state }) {
 
 }
 
+/* ── Back to portfolio link (top-left) ──────────────────────────────────── */
+function PortfolioLink() {
+  const [copied, setCopied] = useState(false);
+  const SHARE_URL = "https://tracker.princetomar.com";
+
+  const share = async () => {
+    window.track("share_clicked");
+    const data = {
+      title: "Peer Review Planner",
+      text: "Turn reviewer comments into a revision checklist.",
+      url: SHARE_URL,
+    };
+    try {
+      if (navigator.share) { await navigator.share(data); window.track("share_completed", { method: "native" }); return; }
+    } catch (e) {
+      if (e && e.name === "AbortError") return; // user closed the share sheet
+    }
+    try {
+      await navigator.clipboard.writeText(SHARE_URL);
+      window.track("share_completed", { method: "copy" });
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt("Copy this link:", SHARE_URL);
+    }
+  };
+
+  return (
+    <nav aria-label="Site" className="site-bar">
+      <a href="https://www.princetomar.com" className="site-bar-link"
+        onClick={() => window.track("portfolio_clicked")}>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M8.5 3L4.5 7l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span>Prince Tomar</span>
+      </a>
+      <button type="button" className="site-bar-link site-bar-share" onClick={share}>
+        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M7 9V1.8M4.2 4.4L7 1.6l2.8 2.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M2.5 7.5v4a1 1 0 001 1h7a1 1 0 001-1v-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span aria-live="polite">{copied ? "Link copied" : "Share"}</span>
+      </button>
+    </nav>
+  );
+}
+
 /* ── Onboarding Page ─────────────────────────────────────────────────────── */
 function OnboardingPage({ onSubmit, onExample }) {
   const C = window.C;
@@ -91,7 +138,7 @@ function OnboardingPage({ onSubmit, onExample }) {
   ];
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "44px 16px 80px", fontFamily: "system-ui, -apple-system, sans-serif" }}>
+    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "20px 16px 80px", fontFamily: "system-ui, -apple-system, sans-serif" }}>
       <div style={{ width: "100%", maxWidth: 620 }}>
 
         {/* Hero */}
@@ -345,4 +392,4 @@ function EmailPopup({ onClose }) {
   );
 }
 
-Object.assign(window, { OnboardingPage, RateLimitBanner, TrackerSummary, DailyQuests, AddFeedbackModal, EmailPopup });
+Object.assign(window, { PortfolioLink, OnboardingPage, RateLimitBanner, TrackerSummary, DailyQuests, AddFeedbackModal, EmailPopup });

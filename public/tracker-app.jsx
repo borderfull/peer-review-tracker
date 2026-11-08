@@ -132,7 +132,12 @@ function App() {
   const doneTasks  = themes.reduce((s,th) => s + th.tasks.filter(t=>t.done).length, 0);
 
   if (mode === "onboarding") {
-    return <OnboardingPage onSubmit={handleOnboardingSubmit} onExample={showExample} />;
+    return (
+      <div style={{ background:C.bg, minHeight:"100vh", fontFamily:"system-ui, -apple-system, sans-serif" }}>
+        <PortfolioLink />
+        <OnboardingPage onSubmit={handleOnboardingSubmit} onExample={showExample} />
+      </div>
+    );
   }
 
   const sorted = [...themes].sort((a, b) => {
@@ -144,6 +149,7 @@ function App() {
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg, fontFamily:"system-ui, -apple-system, sans-serif" }}>
+      <PortfolioLink />
       <RateLimitBanner state={rateLimitState} />
 
       {isExample && (
@@ -160,7 +166,7 @@ function App() {
         </div>
       )}
 
-      <div style={{ maxWidth:700, margin:"0 auto", padding:"26px 16px 64px" }}>
+      <div style={{ maxWidth:700, margin:"0 auto", padding:"14px 16px 64px" }}>
 
         {/* Page header */}
         <div className="hdr" style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12, marginBottom:22 }}>

@@ -7,6 +7,8 @@
 
   <link rel="icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;1,400&display=swap" />
   <link rel="preconnect" href="https://www.googletagmanager.com" />
   <link rel="preconnect" href="https://www.google-analytics.com" />
 
@@ -58,6 +60,25 @@
       .hdr { flex-direction: column; align-items: stretch !important; }
       .hdr-actions { justify-content: flex-end; }
       .legend-note { margin-left: 0 !important; }
+    }
+
+    /* Top bar: back to main site */
+    .site-bar {
+      height: 48px; display: flex; flex-direction: row; align-items: center; justify-content: space-between;
+      padding: 0 24px 0 32px;
+      background: transparent;                      /* same colour as the page */
+    }
+    .site-bar-link {
+      font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 400;
+      font-size: 12px; letter-spacing: 0.02em;
+      color: oklch(42% 0.115 32); text-decoration: none; /* deep terracotta, readable at 10px */
+    }
+    .site-bar-link { display: inline-flex; align-items: center; gap: 6px; }
+    .site-bar-share { background: none; border: none; cursor: pointer; padding: 6px 0; }
+    .site-bar-link:hover { color: oklch(42% 0.115 32); text-decoration: none; }
+    @media (max-width: 680px) {
+      .site-bar { padding: 0 16px; }
+      .site-bar-link { font-size: 11.5px; }
     }
 
     /* Warm selection colour */
