@@ -8,6 +8,8 @@ function RateLimitBanner({ state }) {
   const { used, resetTime } = state;
   const max = window.RATE_LIMIT_MAX;
   const isLimited = used >= max;
+  // Only speak up once the limit is actually reached
+  if (!isLimited) return null;
   const pct = used / max * 100;
 
   const now = Date.now();
@@ -20,7 +22,7 @@ function RateLimitBanner({ state }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: isLimited ? "oklch(36% 0.12 35)" : C.terraDark, letterSpacing: "0.04em" }}>
-              {isLimited ? "Daily limit reached" : `You have used ${used} out of ${max} daily requests`}
+              You've used today's plan builds. Your current plan still works as normal.
             </span>
             {isLimited &&
             <span style={{ fontSize: 11, color: "oklch(36% 0.12 35)" }}>
@@ -44,142 +46,157 @@ function RateLimitBanner({ state }) {
 }
 
 /* ── Onboarding Page ─────────────────────────────────────────────────────── */
-function OnboardingPage({ onSubmit }) {
+function OnboardingPage({ onSubmit, onExample }) {
   const C = window.C;
-  // ✅ Each reviewer has a stable UUID — avoids broken state on remove
-  const [feedbacks, setFeedbacks] = useState(() => [
-    { id: crypto.randomUUID(), text: "" },
-    { id: crypto.randomUUID(), text: "" },
-  ]);
+  // Start with ONE box: most people have a single decision letter
+  const [feedbacks, setFeedbacks] = useState(() => [{ id: crypto.randomUUID(), text: "" }]);
   const [parsing, setParsing] = useState(false);
   const [parseStatus, setParseStatus] = useState("");
   const [error, setError] = useState("");
 
-  const addReviewer = () => setFeedbacks((f) => [...f, { id: crypto.randomUUID(), text: "" }]);
+  const single = feedbacks.length === 1;
+  const addReviewer = () => { window.track("reviewer_box_added"); setFeedbacks((f) => [...f, { id: crypto.randomUUID(), text: "" }]); };
   const setFeedback = (id, v) => setFeedbacks((f) => f.map((x) => x.id === id ? { ...x, text: v } : x));
   const removeFeedback = (id) => setFeedbacks((f) => f.filter((x) => x.id !== id));
 
   const handleSubmit = async () => {
     const active = feedbacks
-      .map((f, i) => ({ text: f.text.trim(), label: `Reviewer ${i + 1}` }))
+      .map((f, i) => ({ text: f.text.trim(), label: single ? "All reviewers (identify each reviewer from the text)" : `Reviewer ${i + 1}` }))
       .filter((f) => f.text);
-    if (!active.length) {setError("Please paste at least one reviewer's feedback.");return;}
-    if (!window.canMakeRequest()) {setError("Daily limit reached. Check back tomorrow at midnight UTC.");return;}
-    setParsing(true);setError("");
+    if (!active.length) { setError("Paste your reviewer comments first."); return; }
+    if (!window.canMakeRequest()) { setError("You've used today's plan builds. Come back tomorrow, or try the example in the meantime."); return; }
+    setParsing(true); setError("");
     try {
-      setParseStatus(`Synthesising ${active.length} reviewer${active.length > 1 ? "s" : ""}…`);
+      setParseStatus("Reading the comments and grouping them into tasks…");
+      window.track("plan_build_started", { boxes: active.length });
       const themes = await window.parseAllFeedback(active);
+      window.track("plan_built", { themes: themes.length, tasks: themes.reduce((s, th) => s + th.tasks.length, 0) });
       onSubmit(themes);
     } catch (e) {
+      window.track("plan_build_failed", { reason: e.message === "__RATE_LIMIT__" ? "rate_limit" : "error" });
       setError(e.message === "__RATE_LIMIT__" ?
-      "☕ You've hit the daily limit — check back tomorrow at midnight UTC." :
-      e.message || "Something went wrong. Please try again.");
-    } finally {setParsing(false);setParseStatus("");}
+        "You've used today's plan builds. Come back tomorrow, or try the example in the meantime." :
+        e.message || "Something went wrong. Please try again.");
+    } finally { setParsing(false); setParseStatus(""); }
   };
 
   const canSubmit = !parsing && feedbacks.some((f) => f.text.trim());
-  const field = { width: "100%", padding: "10px 13px", borderRadius: 7, border: `1px solid ${C.border}`, fontSize: 13.5, background: C.surface, color: C.text, boxSizing: "border-box", fontFamily: "inherit" };
-  const rlState = window.getRateLimitState();
-  const remaining = Math.max(0, window.RATE_LIMIT_MAX - rlState.used);
+  const field = { width: "100%", padding: "12px 14px", borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 13.5, background: C.surface, color: C.text, boxSizing: "border-box", fontFamily: "inherit" };
+  const remaining = Math.max(0, window.RATE_LIMIT_MAX - window.getRateLimitState().used);
+
+  const steps = [
+    { n: "1", t: "Paste", d: "your decision letter or reviewer comments" },
+    { n: "2", t: "Get a plan", d: "grouped by theme, duplicates merged" },
+    { n: "3", t: "Tick off tasks", d: "progress saves in this browser" },
+  ];
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "48px 20px 80px" }}>
+    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "44px 16px 80px", fontFamily: "system-ui, -apple-system, sans-serif" }}>
       <div style={{ width: "100%", maxWidth: 620 }}>
 
-        {/* Header */}
-        <div style={{ marginBottom: 36, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
-          <div style={{ display: "flex", width: 60, height: 60, borderRadius: 14, background: C.terra, marginBottom: 18, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        {/* Hero */}
+        <div style={{ marginBottom: 28, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div aria-hidden="true" style={{ display: "flex", width: 56, height: 56, borderRadius: 14, background: C.terra, marginBottom: 16, alignItems: "center", justifyContent: "center" }}>
             <svg viewBox="0 0 28 28" width="30" height="30" fill="none">
-              <path d="M4 2h14l6 6v18a1 1 0 01-1 1H5a1 1 0 01-1-1V3a1 1 0 011-1z" fill="rgba(255,255,255,0.22)" />
-              <path d="M18 2l6 6h-5a1 1 0 01-1-1V2z" fill="rgba(255,255,255,0.22)" />
-              <rect x="7" y="11" width="14" height="2"   rx="1" fill="white" opacity="0.95" />
-              <rect x="7" y="16" width="10" height="1.8" rx="0.9" fill="white" opacity="0.6"  />
-              <rect x="7" y="21" width="12" height="1.8" rx="0.9" fill="white" opacity="0.6"  />
+              <rect x="4" y="5" width="5" height="5" rx="1.2" fill="white" />
+              <path d="M5.2 7.5l1.2 1.2 2-2.3" stroke="oklch(55% 0.14 32)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              <rect x="12" y="6.6" width="12" height="1.8" rx="0.9" fill="white" />
+              <rect x="4" y="12" width="5" height="5" rx="1.2" fill="white" />
+              <path d="M5.2 14.5l1.2 1.2 2-2.3" stroke="oklch(55% 0.14 32)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              <rect x="12" y="13.6" width="9" height="1.8" rx="0.9" fill="white" />
+              <rect x="4.6" y="19.6" width="3.8" height="3.8" rx="1" stroke="white" strokeWidth="1.2" />
+              <rect x="12" y="20.6" width="11" height="1.8" rx="0.9" fill="white" opacity="0.6" />
             </svg>
           </div>
-          <h1 style={{ margin: "0 0 6px", fontSize: 26, fontFamily: "Georgia, serif", fontWeight: 700, color: C.text, letterSpacing: "-0.01em" }}>
-            Peer Review Tracker <span style={{ fontSize: 14, fontWeight: 400, color: C.textMuted, fontFamily: "system-ui, sans-serif", letterSpacing: "0.03em" }}>(Experimental)</span>
-          </h1>
-          <p style={{ margin: 0, fontSize: 14, color: C.textMuted, lineHeight: 1.65, maxWidth: 440, marginInline: "auto" }}>Paste all your reviewer feedback below. The AI will synthesize it into a unified, theme-based revision plan in clear tasks to work through.
-
-          </p>
-
-          {/* Claude AI Disclaimer */}
-          <div style={{ marginTop: 18, padding: "12px 14px", borderRadius: 8, background: "oklch(98% 0.015 260)", border: `1px solid oklch(88% 0.04 260)`, maxWidth: 440, marginInline: "auto" }}>
-            <p style={{ margin: 0, fontSize: 12, color: "oklch(40% 0.08 258)", lineHeight: 1.6 }}>
-              <strong>Powered by Claude AI:</strong> This tool uses Claude Sonnet 4.6 to analyze and organize your reviewer feedback. Your feedback text is sent to Anthropic's servers for processing. Please review Anthropic's <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener noreferrer" style={{ color: "oklch(45% 0.12 258)", textDecoration: "underline" }}>privacy policy</a> before proceeding.
-            </p>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.terraDark, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 10 }}>
+            Peer Review Planner
           </div>
+          <h1 style={{ margin: "0 0 12px", fontSize: "clamp(24px, 5vw, 32px)", lineHeight: 1.2, fontFamily: "Georgia, serif", fontWeight: 700, color: C.text, letterSpacing: "-0.015em", maxWidth: 520 }}>
+            Turn reviewer comments into a revision checklist
+          </h1>
+          <p style={{ margin: "0 0 18px", fontSize: 15, color: C.textMuted, lineHeight: 1.6, maxWidth: 470 }}>
+            Paste your reviews and get one clear plan: concerns grouped by theme, duplicates merged, and every comment rewritten as a task you can tick off.
+          </p>
+          <button type="button" onClick={onExample}
+            style={{ padding: "9px 16px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.surface, color: C.text, fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>
+            See an example plan →
+          </button>
         </div>
 
-        {/* Reviewer Feedback */}
-        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "20px 22px", marginBottom: 16, boxShadow: `0 1px 4px oklch(0% 0 0 / 0.06)` }}>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.textMuted, marginBottom: 18 }}>
-            Reviewer Feedback
-          </label>
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {/* How it works */}
+        <ol style={{ listStyle: "none", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 10, marginBottom: 22 }}>
+          {steps.map((s) => (
+            <li key={s.n} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 12px", borderRadius: 8, background: C.surface2, border: `1px solid ${C.borderLight}` }}>
+              <span aria-hidden="true" style={{ width: 20, height: 20, borderRadius: "50%", background: C.terraBg, border: `1px solid ${C.terraLight}`, color: C.terraDark, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{s.n}</span>
+              <span style={{ fontSize: 12.5, color: C.textMuted, lineHeight: 1.45 }}><strong style={{ color: C.text }}>{s.t}</strong> {s.d}</span>
+            </li>
+          ))}
+        </ol>
+
+        {/* Paste area */}
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: "20px 20px", marginBottom: 14, boxShadow: `0 1px 4px oklch(0% 0 0 / 0.06)` }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             {feedbacks.map((fb, i) =>
-            <div key={fb.id}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: C.terra, letterSpacing: "0.04em" }}>Reviewer {i + 1}</span>
-                  {feedbacks.length > 1 &&
-                <button onClick={() => removeFeedback(fb.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: C.textMuted, padding: "0 2px" }}>Remove</button>
-                }
+              <div key={fb.id}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 7 }}>
+                  <label htmlFor={`fb-${fb.id}`} style={{ fontSize: 13, fontWeight: 600, color: single ? C.text : C.terraDark }}>
+                    {single ? "Reviewer comments" : `Reviewer ${i + 1}`}
+                  </label>
+                  {!single &&
+                    <button type="button" onClick={() => removeFeedback(fb.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12.5, color: C.textMuted, padding: "0 2px" }}>Remove</button>}
                 </div>
                 <textarea
-                value={fb.text} onChange={(e) => setFeedback(fb.id, e.target.value)}
-                placeholder={`Paste Reviewer ${i + 1}'s full comments here…`}
-                style={{ ...field, height: 160, lineHeight: 1.65, resize: "vertical", fontFamily: "Georgia, serif", fontSize: 13 }} />
+                  id={`fb-${fb.id}`}
+                  value={fb.text} onChange={(e) => setFeedback(fb.id, e.target.value)}
+                  placeholder={single
+                    ? "Paste the whole decision letter or all reviewer comments here. No need to split them up: the planner works out which reviewer said what."
+                    : `Paste Reviewer ${i + 1}'s comments here…`}
+                  style={{ ...field, height: single ? 220 : 150, lineHeight: 1.65, resize: "vertical", fontFamily: "Georgia, serif" }} />
               </div>
             )}
           </div>
           <button
+            type="button"
             onClick={addReviewer}
-            style={{ marginTop: 14, background: "none", border: `1px dashed ${C.border}`, borderRadius: 7, cursor: "pointer", width: "100%", padding: "9px", fontSize: 13, color: C.textMuted }}
+            style={{ marginTop: 12, background: "none", border: `1px dashed ${C.border}`, borderRadius: 7, cursor: "pointer", width: "100%", padding: "9px", fontSize: 13, color: C.textMuted }}
             onMouseEnter={(e) => e.currentTarget.style.background = C.terraBg}
             onMouseLeave={(e) => e.currentTarget.style.background = "none"}>
-            
-            + Add another reviewer
+            {single ? "Prefer to paste each reviewer separately? Add a box" : "+ Add another reviewer"}
           </button>
         </div>
 
         {error &&
-        <div style={{ padding: "11px 14px", borderRadius: 8, marginBottom: 14, fontSize: 13, lineHeight: 1.55, background: "oklch(96% 0.04 40)", border: `1px solid oklch(85% 0.09 40)`, color: "oklch(36% 0.12 35)" }}>
+          <div role="alert" style={{ padding: "11px 14px", borderRadius: 8, marginBottom: 14, fontSize: 13, lineHeight: 1.55, background: "oklch(96% 0.04 40)", border: `1px solid oklch(85% 0.09 40)`, color: "oklch(36% 0.12 35)" }}>
             {error}
-          </div>
-        }
+          </div>}
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <span style={{ fontSize: 12, color: remaining === 0 ? "oklch(36% 0.12 35)" : C.textMuted }}>
-            {remaining === 0
-              ? "You've used today's allowance — come back tomorrow"
-              : <><strong style={{ color: remaining <= 1 ? C.terra : C.text }}>{remaining}</strong> tracker build{remaining !== 1 ? "s" : ""} left for you today</>
-            }
-          </span>
-          <div style={{ display: "flex", gap: 4 }}>
-            {Array.from({ length: window.RATE_LIMIT_MAX }).map((_, i) => (
-              <div key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: i < rlState.used ? (remaining === 0 ? "oklch(50% 0.14 40)" : C.terra) : C.borderLight, transition: "background 0.2s" }} />
-            ))}
-          </div>
-        </div>
+        {remaining === 0 && !error &&
+          <p style={{ fontSize: 12.5, color: "oklch(36% 0.12 35)", marginBottom: 10, textAlign: "center" }}>
+            You've used today's plan builds. Come back tomorrow, or look at the example in the meantime.
+          </p>}
 
         <button
+          type="button"
           onClick={handleSubmit} disabled={!canSubmit}
           style={{
             width: "100%", padding: "15px", borderRadius: 9, border: "none",
-            background: canSubmit ? C.terra : C.border, color: "white",
-            fontSize: 15, fontWeight: 700, cursor: canSubmit ? "pointer" : "default",
-            letterSpacing: "0.02em", display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+            background: canSubmit ? C.terra : C.border, color: canSubmit ? "white" : C.textMuted,
+            fontSize: 15.5, fontWeight: 700, cursor: canSubmit ? "pointer" : "default",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
             boxShadow: canSubmit ? `0 4px 18px oklch(0% 0 0 / 0.14)` : "none",
             transition: "background 0.2s, box-shadow 0.2s"
           }}>
-          
-          {parsing && <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />}
-          {parsing ? parseStatus || "Synthesising…" : "Synthesise & Build Tracker"}
+          {parsing && <span aria-hidden="true" style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />}
+          {parsing ? parseStatus || "Building your plan…" : "Make my revision plan"}
         </button>
+
+        {/* Privacy, short and calm, after the action */}
+        <p style={{ margin: "14px auto 0", maxWidth: 480, fontSize: 12, color: C.textMuted, lineHeight: 1.6, textAlign: "center" }}>
+          Your text is sent to Anthropic's Claude to build the plan. This site doesn't store it, and your plan stays in this browser.{" "}
+          <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener noreferrer" style={{ color: C.terraDark }}>Privacy policy</a>
+        </p>
       </div>
     </div>);
-
 }
 
 /* ── Tracker Summary (intro + progress bar) ──────────────────────────────── */
@@ -194,9 +211,9 @@ function TrackerSummary({ themes, earnedXP, totalXP }) {
         Your revision plan covers <strong>{totalTasks} tasks</strong> across <strong>{themes.length} theme{themes.length !== 1 ? "s" : ""}</strong>.{" "}
         {doneTasks > 0 ?
         <>{doneTasks} completed so far — keep going.</> :
-        <>Work through them at your own pace, or follow today's suggestions below.</>}
+        <>Work through them in any order, or start with today's picks below.</>}
       </p>
-      <ProgressBar earned={earnedXP} total={totalXP} />
+      <ProgressBar earned={earnedXP} total={totalXP} doneTasks={doneTasks} totalTasks={totalTasks} />
     </div>);
 
 }
@@ -216,21 +233,21 @@ function DailyQuests({ themes }) {
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <path d="M7 1l1.6 3.2 3.5.5-2.55 2.48.6 3.52L7 9l-3.15 1.7.6-3.52L2 4.7l3.5-.5L7 1z" fill={C.amber} stroke={C.terra} strokeWidth="0.5" />
         </svg>
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: C.terraDark }}>Today's Suggested Tasks</span>
+        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: C.terraDark }}>Today's picks</span>
         <span style={{ fontSize: 11, color: C.textMuted, marginLeft: "auto" }}>{today}</span>
       </div>
       <div style={{ padding: "11px 14px", borderRadius: 8, marginBottom: 8, background: C.amberLight, border: `1px solid ${C.amber}` }}>
-        <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: C.terraDark, marginBottom: 5 }}>High Priority · +{boss.xp} XP</div>
+        <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: C.terraDark, marginBottom: 5 }}>Start here · high priority</div>
         <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.55 }}>{boss.text}</div>
         <div style={{ fontSize: 11, color: C.textMuted, marginTop: 5 }}>{boss.themeName}</div>
       </div>
       {side.map((q, i) =>
-      <div key={q.id || i} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, padding: "9px 14px", borderRadius: 8, marginBottom: 6, background: C.surface, border: `1px solid ${C.borderLight}` }}>
+      <div key={q.id || i} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap", padding: "9px 14px", borderRadius: 8, marginBottom: 6, background: C.surface, border: `1px solid ${C.borderLight}` }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.5 }}>{q.text}</div>
             <div style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>{q.themeName}</div>
           </div>
-          <span style={{ fontSize: 10.5, fontWeight: 700, flexShrink: 0, padding: "2px 8px", borderRadius: 4, background: C.sageLight, color: C.sage, border: `1px solid oklch(82% 0.06 145)` }}>+{q.xp} XP</span>
+          <span style={{ fontSize: 10.5, fontWeight: 700, flexShrink: 0, padding: "2px 8px", borderRadius: 4, background: C.sageLight, color: C.sage, border: `1px solid oklch(82% 0.06 145)` }}>Quick win</span>
         </div>
       )}
     </div>);
@@ -252,6 +269,7 @@ function AddFeedbackModal({ onMerge, onClose }) {
     try {
       const lbl = label.trim() || `Additional Reviewer`;
       const themes = await window.parseSingleFeedback(feedback.trim(), lbl);
+      window.track("reviews_added", { themes: themes.length });
       onMerge(themes);onClose();
     } catch (e) {
       setError(e.message === "__RATE_LIMIT__" ? "☕ Daily limit reached — check back tomorrow at midnight UTC." : e.message || "Something went wrong.");
@@ -264,8 +282,8 @@ function AddFeedbackModal({ onMerge, onClose }) {
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "oklch(0% 0 0 / 0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: C.surface, borderRadius: 12, width: "100%", maxWidth: 540, padding: 28, boxShadow: "0 24px 64px oklch(0% 0 0 / 0.18)", margin: "0 auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: 17, fontFamily: "Georgia, serif", color: C.text }}>Add More Feedback</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textMuted, lineHeight: 1 }}>×</button>
+          <h2 style={{ margin: 0, fontSize: 17, fontFamily: "Georgia, serif", color: C.text }}>Add more reviews</h2>
+          <button type="button" aria-label="Close" onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textMuted, lineHeight: 1 }}>×</button>
         </div>
         <div style={{ marginBottom: 14 }}>
           <label style={{ display: "block", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: C.textMuted, marginBottom: 6 }}>Reviewer label (optional)</label>
@@ -280,7 +298,7 @@ function AddFeedbackModal({ onMerge, onClose }) {
           <button onClick={onClose} style={{ padding: "10px 18px", borderRadius: 7, border: `1px solid ${C.border}`, background: C.surface2, cursor: "pointer", fontSize: 14, color: C.text }}>Cancel</button>
           <button onClick={handleAdd} disabled={loading || !feedback.trim()} style={{ padding: "10px 22px", borderRadius: 7, border: "none", background: loading || !feedback.trim() ? C.border : C.terra, color: "white", cursor: loading || !feedback.trim() ? "default" : "pointer", fontSize: 14, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
             {loading && <span style={{ display: "inline-block", width: 13, height: 13, border: "2px solid rgba(255,255,255,0.35)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />}
-            {loading ? "Synthesising…" : "Add & Merge"}
+            {loading ? "Adding to your plan…" : "Add to my plan"}
           </button>
         </div>
       </div>
@@ -298,11 +316,11 @@ function EmailPopup({ onClose }) {
       <div onClick={(e) => e.stopPropagation()} style={{ background: C.surface, borderRadius: 12, width: "100%", maxWidth: 420, padding: 28, boxShadow: "0 24px 64px oklch(0% 0 0 / 0.18)", margin: "0 auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 17, fontFamily: "Georgia, serif", color: C.text }}>Send Feedback</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textMuted, lineHeight: 1 }}>×</button>
+          <button type="button" aria-label="Close" onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.textMuted, lineHeight: 1 }}>×</button>
         </div>
 
         <p style={{ margin: "0 0 18px", fontSize: 14, color: C.textMuted, lineHeight: 1.65 }}>
-          We'd love to hear your thoughts about the Peer Review Tracker! Send your feedback directly to:
+          We'd love to hear what you think of the Peer Review Planner. Send your feedback directly to:
         </p>
 
         <div style={{ padding: "16px 14px", borderRadius: 8, background: C.terraBg, border: `1px solid ${C.terraLight}`, marginBottom: 20, textAlign: "center" }}>

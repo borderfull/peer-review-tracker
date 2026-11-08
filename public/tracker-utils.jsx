@@ -50,7 +50,7 @@ const C = {
   surface:     "oklch(98.5% 0.010 78)",
   surface2:    "oklch(96.0% 0.015 74)",
   text:        "oklch(22%   0.030 58)",
-  textMuted:   "oklch(50%   0.025 60)",
+  textMuted:   "oklch(45%   0.025 60)",
   border:      "oklch(86%   0.038 70)",
   borderLight: "oklch(91%   0.022 74)",
   terra:       "oklch(55%   0.140 32)",
@@ -63,14 +63,47 @@ const C = {
   sageLight:   "oklch(93%   0.030 145)",
 };
 
+// Revision stages, based on share of points earned (0–1)
 const LEVELS = [
-  { name: "Novice",              xpNeeded: 0   },
-  { name: "Graduate Scholar",    xpNeeded: 60  },
-  { name: "Researcher",          xpNeeded: 150 },
-  { name: "Senior Researcher",   xpNeeded: 280 },
-  { name: "Associate Professor", xpNeeded: 420 },
-  { name: "Full Professor",      xpNeeded: 600 },
+  { name: "Getting started",       share: 0    },
+  { name: "First pass",            share: 0.15 },
+  { name: "Major issues addressed",share: 0.4  },
+  { name: "Polishing",             share: 0.7  },
+  { name: "Final checks",          share: 0.9  },
+  { name: "Ready to resubmit",     share: 1    },
 ];
+
+// ── Analytics: Vercel custom events (no review text is ever sent) ─────────
+function track(name, data) {
+  try { if (typeof window.va === "function") window.va("event", data ? { name, data } : { name }); } catch {}
+  try { if (typeof window.gtag === "function") window.gtag("event", name, data || {}); } catch {}
+}
+
+// ── Example plan (loads instantly, no API call, doesn't count toward the limit)
+function getSampleThemes() {
+  const id = () => crypto.randomUUID();
+  const t = (text, xp, importance, sources, done = false) => ({ id: id(), text, xp, importance, sources, done });
+  return [
+    { id: id(), themeName: "Methodology", summary: "Reviewers want the sampling and analysis choices justified more clearly.", tasks: [
+      t("Explain why you chose purposive sampling and what its limits are (Section 3.1)", 28, "essential", ["Reviewer 1", "Reviewer 2"]),
+      t("Report how many participants were invited, how many took part, and why some dropped out", 20, "major", ["Reviewer 2"], true),
+      t("Add a short paragraph describing how the interview codes were checked by a second coder", 18, "major", ["Reviewer 1"]),
+    ]},
+    { id: id(), themeName: "Literature Review", summary: "The review misses recent work and doesn't position the study against it.", tasks: [
+      t("Add and discuss 3–5 studies from 2022 onward on the same topic", 22, "major", ["Reviewer 3"]),
+      t("End the review with two sentences stating the gap this paper fills", 15, "moderate", ["Reviewer 1", "Reviewer 3"], true),
+    ]},
+    { id: id(), themeName: "Discussion", summary: "Findings are summarised but not linked back to theory or practice.", tasks: [
+      t("Connect each main finding to the framework introduced in Section 2", 24, "major", ["Reviewer 2"]),
+      t("Add a 'Limitations' subsection covering sample size and context", 14, "moderate", ["Reviewer 1"]),
+    ]},
+    { id: id(), themeName: "Writing Quality", summary: "Some passages are long and repetitive.", tasks: [
+      t("Shorten the introduction to about one page", 10, "minor", ["Reviewer 3"]),
+      t("Define every acronym the first time it appears", 5, "trivial", ["Reviewer 2"]),
+      t("Fix the inconsistent tense in the Results section", 6, "trivial", ["Reviewer 1"]),
+    ]},
+  ];
+}
 
 const THEME_COLORS = {
   "Methodology":      "oklch(50% 0.12 32)",
@@ -90,9 +123,10 @@ const IMPORTANCE_DOT = {
   moderate: "#5070b8", minor: "#507850", trivial: "#988070",
 };
 
-function getLevel(xp) {
+function getLevel(earned, total) {
+  const share = total > 0 ? earned / total : 0;
   let idx = 0;
-  for (let i = LEVELS.length - 1; i >= 0; i--) { if (xp >= LEVELS[i].xpNeeded) { idx = i; break; } }
+  for (let i = LEVELS.length - 1; i >= 0; i--) { if (share >= LEVELS[i].share) { idx = i; break; } }
   return { level: LEVELS[idx], nextLevel: LEVELS[idx + 1] || null };
 }
 
@@ -125,17 +159,17 @@ function exportProgress(themes) {
   const totalXP  = themes.reduce((s,th) => s+th.tasks.reduce((ss,t)=>ss+t.xp, 0), 0);
   const earnedXP = themes.reduce((s,th) => s+th.tasks.filter(t=>t.done).reduce((ss,t)=>ss+t.xp, 0), 0);
   const lines = [
-    "# Peer Review Revision Progress", `Exported: ${date}`, "",
-    `**Overall: ${earnedXP} / ${totalXP} XP  (${Math.round(earnedXP/Math.max(totalXP,1)*100)}% complete)**`, "",
+    "# Peer Review Planner — Revision Plan", `Exported: ${date}`, "",
+    `**Overall: ${themes.reduce((s,th)=>s+th.tasks.filter(t=>t.done).length,0)} of ${themes.reduce((s,th)=>s+th.tasks.length,0)} tasks done  (${Math.round(earnedXP/Math.max(totalXP,1)*100)}% of points)**`, "",
   ];
   for (const th of themes) {
     const thT = th.tasks.reduce((s,t)=>s+t.xp, 0);
     const thE = th.tasks.filter(t=>t.done).reduce((s,t)=>s+t.xp, 0);
-    lines.push(`## ${th.themeName}  (${thE}/${thT} XP)`);
+    lines.push(`## ${th.themeName}  (${th.tasks.filter(t=>t.done).length}/${th.tasks.length} tasks)`);
     if (th.summary) lines.push(`> ${th.summary}`, "");
     for (const t of th.tasks) {
       const src = t.sources?.length ? `  [${t.sources.join(", ")}]` : "";
-      lines.push(`- [${t.done?"x":" "}] ${t.text}  *(+${t.xp} XP, ${t.importance})${src}*`);
+      lines.push(`- [${t.done?"x":" "}] ${t.text}  *(${t.importance}, ${t.xp} pts)${src}*`);
     }
     lines.push("");
   }
@@ -212,7 +246,7 @@ async function parseSingleFeedback(text, label) {
 }
 
 Object.assign(window, {
-  C, LEVELS, IMPORTANCE_DOT, getLevel, generateId, getThemeColor,
+  C, LEVELS, IMPORTANCE_DOT, getSampleThemes, track, getLevel, generateId, getThemeColor,
   getDailyQuests, exportProgress, mergeIntoThemes, parseAllFeedback, parseSingleFeedback,
   getRateLimitState, canMakeRequest, RATE_LIMIT_MAX,
 });
